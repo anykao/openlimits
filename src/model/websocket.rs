@@ -1,7 +1,7 @@
-use super::OrderBookResponse;
-use serde::Serialize;
+use super::{OrderBookResponse, Trade};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Subscription {
     UserData(String),            // listen key
     AggregateTrade(String),      // symbol
@@ -19,4 +19,5 @@ pub enum Subscription {
 pub enum OpenLimitsWebsocketMessage {
     Ping,
     OrderBook(OrderBookResponse),
+    Trades(Vec<Trade>),
 }

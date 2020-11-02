@@ -2,15 +2,24 @@ use dotenv::dotenv;
 use rust_decimal::prelude::Decimal;
 use std::env;
 
-use openlimits::coinbase::{
-    model::{GetFillsReq, GetOrderRequest},
-    Coinbase,
+use openlimits::{
+    coinbase::{
+        model::{CancelAfter, GetFillsReq, GetOrderRequest, OrderTimeInForce},
+        Coinbase, CoinbaseCredentials, CoinbaseParameters,
+    },
+    exchange::Exchange,
+    exchange_info::ExchangeInfoRetrieval,
 };
 
 #[tokio::test]
 async fn get_account() {
     let exchange = init().await;
-    let resp = exchange.get_account(None).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_account(None)
+        .await
+        .unwrap();
     println!("{:?}", resp);
 }
 
@@ -22,14 +31,24 @@ async fn get_all_open_orders() {
         paginator: None,
         product_id: None,
     };
-    let resp = exchange.get_orders(Some(&params)).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_orders(Some(&params))
+        .await
+        .unwrap();
     println!("{:?}", resp);
 }
 
 #[tokio::test]
 async fn get_all_orders() {
     let exchange = init().await;
-    let resp = exchange.get_orders(None).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_orders(None)
+        .await
+        .unwrap();
     println!("{:?}", resp);
 
     // let params = GetOrderRequest{
@@ -49,27 +68,49 @@ async fn get_all_orders_for_a_given_product() {
         product_id: Some(String::from("ETH-BTC")),
     };
 
-    let resp = exchange.get_orders(Some(&params)).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_orders(Some(&params))
+        .await
+        .unwrap();
     println!("{:?}", resp);
 }
 
 #[tokio::test]
 async fn get_order() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let order = exchange
-        .market_buy("BTC-USD", Decimal::new(1, 3))
+        .inner_client()
+        .unwrap()
+        .market_buy(pair, Decimal::new(1, 3))
         .await
         .unwrap();
 
-    let resp = exchange.get_order(order.id).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_order(order.id)
+        .await
+        .unwrap();
     println!("{:?}", resp);
 }
 
 #[tokio::test]
 async fn limit_buy() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let resp = exchange
-        .limit_buy("BTC-USD", Decimal::new(1, 3), Decimal::new(5000, 0))
+        .inner_client()
+        .unwrap()
+        .limit_buy(
+            pair,
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::GTC,
+            false,
+        )
         .await
         .unwrap();
     println!("{:?}", resp);
@@ -78,8 +119,76 @@ async fn limit_buy() {
 #[tokio::test]
 async fn limit_sell() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let resp = exchange
-        .limit_sell("BTC-USD", Decimal::new(1, 3), Decimal::new(20000, 0))
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair,
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::GTC,
+            false,
+        )
+        .await
+        .unwrap();
+    println!("{:?}", resp);
+}
+
+#[tokio::test]
+async fn limit_sell_fok() {
+    let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair,
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::FOK,
+            false,
+        )
+        .await
+        .unwrap();
+    println!("{:?}", resp);
+}
+
+#[tokio::test]
+async fn limit_sell_ioc() {
+    let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair,
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::IOC,
+            false,
+        )
+        .await
+        .unwrap();
+    println!("{:?}", resp);
+}
+
+#[tokio::test]
+async fn limit_sell_gtt() {
+    let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair,
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::GTT {
+                cancel_after: CancelAfter::Day,
+            },
+            false,
+        )
         .await
         .unwrap();
     println!("{:?}", resp);
@@ -88,8 +197,11 @@ async fn limit_sell() {
 #[tokio::test]
 async fn market_buy() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let resp = exchange
-        .market_buy("BTC-USD", Decimal::new(1, 3))
+        .inner_client()
+        .unwrap()
+        .market_buy(pair, Decimal::new(1, 3))
         .await
         .unwrap();
     println!("{:?}", resp);
@@ -98,8 +210,11 @@ async fn market_buy() {
 #[tokio::test]
 async fn market_sell() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let resp = exchange
-        .market_sell("BTC-USD", Decimal::new(1, 3))
+        .inner_client()
+        .unwrap()
+        .market_sell(pair, Decimal::new(1, 3))
         .await
         .unwrap();
     println!("{:?}", resp);
@@ -108,25 +223,60 @@ async fn market_sell() {
 #[tokio::test]
 async fn cancel_all_orders() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     exchange
-        .limit_sell("BTC-USD", Decimal::new(1, 3), Decimal::new(20000, 0))
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair.clone(),
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::GTC,
+            false,
+        )
         .await
         .unwrap();
     exchange
-        .limit_sell("BTC-USD", Decimal::new(1, 3), Decimal::new(20000, 0))
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair.clone(),
+            Decimal::new(1, 3),
+            Decimal::new(1000, 0),
+            OrderTimeInForce::GTC,
+            false,
+        )
         .await
         .unwrap();
 
     exchange
-        .limit_buy("ETH-BTC", Decimal::new(2, 2), Decimal::new(2, 2))
+        .inner_client()
+        .unwrap()
+        .limit_buy(
+            pair,
+            Decimal::new(2, 2),
+            Decimal::new(2, 2),
+            OrderTimeInForce::GTC,
+            false,
+        )
         .await
         .unwrap();
 
-    let resp = exchange.cancel_all_orders(Some("BTC-USD")).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .cancel_all_orders(Some("BTC-USD"))
+        .await
+        .unwrap();
 
     println!("{:?}", resp);
 
-    let resp = exchange.cancel_all_orders(None).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .cancel_all_orders(None)
+        .await
+        .unwrap();
 
     println!("{:?}", resp);
 }
@@ -134,11 +284,22 @@ async fn cancel_all_orders() {
 #[tokio::test]
 async fn cancel_order() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let order = exchange
-        .limit_sell("BTC-USD", Decimal::new(1, 3), Decimal::new(20000, 0))
+        .inner_client()
+        .unwrap()
+        .limit_sell(
+            pair,
+            Decimal::new(1, 3),
+            Decimal::new(100000, 0),
+            OrderTimeInForce::GTC,
+            false,
+        )
         .await
         .unwrap();
     let resp = exchange
+        .inner_client()
+        .unwrap()
         .cancel_order(order.id, Some("BTC-USD"))
         .await
         .unwrap();
@@ -149,8 +310,11 @@ async fn cancel_order() {
 #[tokio::test]
 async fn get_fills_for_order() {
     let exchange = init().await;
+    let pair = exchange.get_pair("BTC-USD").await.unwrap().read().unwrap();
     let order = exchange
-        .market_sell("BTC-USD", Decimal::new(1, 3))
+        .inner_client()
+        .unwrap()
+        .market_sell(pair, Decimal::new(1, 3))
         .await
         .unwrap();
 
@@ -160,7 +324,12 @@ async fn get_fills_for_order() {
         paginator: None,
     };
 
-    let resp = exchange.get_fills(Some(&params)).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_fills(Some(&params))
+        .await
+        .unwrap();
     println!("{:?}", resp);
 }
 
@@ -174,17 +343,24 @@ async fn get_fills_for_product() {
         paginator: None,
     };
 
-    let resp = exchange.get_fills(Some(&params)).await.unwrap();
+    let resp = exchange
+        .inner_client()
+        .unwrap()
+        .get_fills(Some(&params))
+        .await
+        .unwrap();
     println!("{:?}", resp);
 }
 
 async fn init() -> Coinbase {
     dotenv().ok();
-    Coinbase::with_credential(
-        &env::var("COINBASE_API_KEY").unwrap(),
-        &env::var("COINBASE_API_SECRET").unwrap(),
-        &env::var("COINBASE_PASSPHRASE").unwrap(),
-        true,
-    )
+    Coinbase::new(CoinbaseParameters {
+        sandbox: true,
+        credentials: Some(CoinbaseCredentials {
+            api_key: env::var("COINBASE_API_KEY").unwrap(),
+            api_secret: env::var("COINBASE_API_SECRET").unwrap(),
+            passphrase: env::var("COINBASE_PASSPHRASE").unwrap(),
+        }),
+    })
     .await
 }

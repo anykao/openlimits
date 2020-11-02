@@ -13,7 +13,9 @@ pub fn get_pair<'a>(name: &str, exchange_info: &'a ExchangeInfo) -> Result<Marke
 
 #[async_trait]
 pub trait ExchangeInfoRetrieval: Sync {
+    async fn get_pair(&self, name: &str) -> Result<MarketPairHandle>;
     async fn retrieve_pairs(&self) -> Result<Vec<MarketPair>>;
+    async fn refresh_market_info(&self) -> Result<Vec<MarketPairHandle>>;
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +74,18 @@ impl ExchangeInfo {
         })
     }
 
-    pub async fn refresh(&self, retrieval: &dyn ExchangeInfoRetrieval) -> Result<()> {
+    pub fn list_pairs(&self) -> Vec<MarketPairHandle> {
+        let market_map = self.pairs.read().unwrap();
+        market_map
+            .iter()
+            .map(|(_symbol, market)| MarketPairHandle::new(market.clone()))
+            .collect()
+    }
+
+    pub async fn refresh(
+        &self,
+        retrieval: &dyn ExchangeInfoRetrieval,
+    ) -> Result<Vec<MarketPairHandle>> {
         let pairs = retrieval.retrieve_pairs().await?;
 
         if let Ok(mut writable_pairs) = self.pairs.write() {
@@ -86,7 +99,7 @@ impl ExchangeInfo {
             }
         }
 
-        Ok(())
+        Ok(self.list_pairs())
     }
 }
 
